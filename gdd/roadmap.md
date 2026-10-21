@@ -15,9 +15,15 @@
 
 ## Phase 2+ (deferred)
 
-- Cloud progress sync
-- Daily puzzle
+- Achievements
 - Leaderboards
+- Account transfer (sign-in + device migration)
+- Cloud progress sync
+- Daily streak + rewards
+- Push notifications
+- Daily puzzle
+- Word definitions
+- Personal stats
 - More languages
 - Themes
 - Social sharing

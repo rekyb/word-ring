@@ -38,7 +38,11 @@ LOW impact  │  QUICK WINS                │  SKIP / DEFER
 
 ## Out of V1 (Phase 2)
 
-Daily puzzle, leaderboards, cloud sync, themes, social sharing, more languages.
+- Achievements, leaderboards, account transfer (Google Play Games Services)
+- Daily streak + rewards, push notifications
+- Daily puzzle
+- Word definitions, personal stats
+- Cloud sync, themes, social sharing, more languages
 
 ## Note on the edge case
 
