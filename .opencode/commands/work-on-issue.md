@@ -7,7 +7,8 @@ Work the issue or task described by: $ARGUMENTS
 Follow the repo workflow in `AGENTS.md` and `DEV_RULES.md` exactly.
 
 1. If the argument is an issue number, read it with `gh issue view` to get the
-   title, body, and labels. Otherwise treat the argument as the task description.
+   title, body, and labels, and note the number. Otherwise treat the argument
+   as the task description, and track any issue number it mentions.
 
 2. Create a feature branch from an up-to-date `main`. Use `feat/<slug>` for a
    feature or `fix/<slug>` for a bug fix, deriving a short kebab-case slug from
@@ -28,3 +29,5 @@ Follow the repo workflow in `AGENTS.md` and `DEV_RULES.md` exactly.
 
 6. Stop. Do NOT push to `origin`, open a PR, or merge. Report what was committed
    and which branch it is on, then wait for an explicit push or merge instruction.
+   When the user later asks to push, open the PR with `Closes #N` in its body so
+   the issue closes automatically when the PR merges.
