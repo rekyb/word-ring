@@ -1,12 +1,27 @@
 # AGENTS.md
 
-Word Ring — a hyper-casual word puzzle game for Android (React Native + Expo,
+Word Ring: a hyper-casual word puzzle game for Android (React Native + Expo,
 TypeScript).
 
 ## Code rules
 
 **Follow `DEV_RULES.md` for all code.** It is the single source of truth for
 structure, TypeScript, components, state, boundaries, testing, and git.
+
+## Design rules
+
+**Follow `DESIGN_RULES.md` for all UI/visual direction** (palette, typography,
+mood). anti-slop is the filter: before any UI, copy, accessibility,
+mobile-layout, or code-comment work, load the relevant skill and follow it.
+
+- Core filter (always): `@antislop`
+- UI / visual: `@antislop-ui`
+- Copy & text: `@antislop-copywriting`
+- Accessibility: `@antislop-human`
+- Mobile / responsive: `@antislop-layoutmobile`
+- Code comments: `@antislop-code`
+
+`DESIGN_RULES.md` supplies the direction; the anti-slop skills reject slop.
 
 ## Hard guardrails
 
