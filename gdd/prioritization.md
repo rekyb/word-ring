@@ -36,7 +36,7 @@ LOW impact  │  QUICK WINS                │  SKIP / DEFER
 | 7 | **Polish + accessibility** — animations, SFX, haptics, tap targets, contrast, screen-reader | S–M | "Polished" is a goal; a11y is non-negotiable |
 | 8 | **Ship** — Play assets (icon, screenshots, listing) + EAS build | M | Hard gate to the store |
 
-## Out of V1 (Phase 2)
+## Backlog
 
 - Achievements, leaderboards, account transfer (Google Play Games Services)
 - Daily streak + rewards, push notifications

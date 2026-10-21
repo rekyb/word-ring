@@ -1,6 +1,6 @@
 # Roadmap
 
-## Phase 1 — MVP (ship to Play)
+## V1 — MVP (ship to Play)
 
 1. Project scaffold (Expo + TS + expo-router + Zustand)
 2. Dictionary + level generator + scoring (with tests)
@@ -13,7 +13,10 @@
 
 **Launch content:** ~100 levels (generation makes scaling effectively free).
 
-## Phase 2+ (deferred)
+## Backlog
+
+Living list of future features — items may be sliced into smaller scoped
+increments before being promoted into a release.
 
 - Achievements
 - Leaderboards

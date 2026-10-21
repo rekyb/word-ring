@@ -23,4 +23,4 @@ Pure logic is unit-tested without a device:
 
 ## Deferred
 
-- Detox end-to-end tests (phase 2).
+- Detox end-to-end tests (deferred).
