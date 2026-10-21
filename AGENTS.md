@@ -27,6 +27,8 @@ mobile-layout, or code-comment work, load the relevant skill and follow it.
 
 - Work on a `feat/...` or `fix/...` branch; never commit directly to `main`.
   Merge via PR.
+- Never push to `origin` or merge a PR automatically. Commit locally on the
+  branch and stop; push and merge only when the prompt explicitly asks.
 - Don't hand-edit lockfiles or run `npm install`/`yarn install` without an
   explicit ask. Dependency changes go through `npx expo install`.
 - Never commit secrets or `.env` files.
