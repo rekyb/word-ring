@@ -42,7 +42,7 @@ Thresholds are tunable constants, not hard-coded per level.
 ## Hints
 
 - **Shuffle** — free, reorders the letters on the ring.
-- **Reveal** — rewarded ad; reveals a random unfound word (or its first letter).
+- **Reveal** — rewarded ad; reveals a random unfound word.
 
 ## Session length
 
