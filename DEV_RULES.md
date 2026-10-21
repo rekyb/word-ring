@@ -192,6 +192,7 @@ rather than re-deriving filters in every screen.
 ## 11. Git & Commits
 
 - Work on a `feat/...` or `fix/...` branch; open a PR against `main`; CI must pass.
+- PR bodies reference their issue with `Closes #N` so the issue auto-closes on merge.
 - Never push or merge automatically. Commit locally on your branch and stop;
   push to `origin`, open a PR, or merge only when the prompt explicitly asks.
 - Commit format: `type: short description` (`feat:`, `fix:`, `docs:`, `chore:`, `test:`).
