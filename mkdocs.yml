@@ -1,0 +1,39 @@
+site_name: Word Ring — Game Design Document
+site_description: Game design docs for Word Ring, a hyper-casual word puzzle for Android
+docs_dir: gdd
+site_dir: site
+
+theme:
+  name: material
+  features:
+    - navigation.indexes
+    - navigation.top
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Overview: index.md
+  - Gameplay: gameplay.md
+  - Levels & Generation: levels.md
+  - Architecture: architecture.md
+  - Monetization: monetization.md
+  - UI/UX: ui-ux.md
+  - Testing & QA: testing.md
+  - Roadmap: roadmap.md
