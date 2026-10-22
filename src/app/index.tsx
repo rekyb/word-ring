@@ -1,0 +1,32 @@
+import { StyleSheet, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { Colors, Spacing } from '@/constants/theme';
+
+export default function HomeScreen() {
+  return (
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>Word Ring</Text>
+      <Text style={styles.subtitle}>A calm word puzzle</Text>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    backgroundColor: Colors.cream,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '600',
+    color: Colors.ink,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: Colors.muted,
+  },
+});
