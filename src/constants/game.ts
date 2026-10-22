@@ -54,8 +54,10 @@ export const CEFR_ORDER: Readonly<Record<CefrLevel, number>> = {
 };
 export const NEUTRAL_CEFR_RANK = 3;
 export const CEFR_TOLERANCE = 0.75;
+export const CEFR_LEVELS: readonly CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1'];
 export const LEVELS_PER_CEFR = 10;
 export const CAMPAIGN_LEVELS = 50;
+export const LEVEL_SEED_STEP = 2654435761;
 
 export const MIN_BY_CEFR: Readonly<Record<CefrLevel, number>> = {
   A1: 3,
