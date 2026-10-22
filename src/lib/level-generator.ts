@@ -2,7 +2,6 @@ import {
   CAMPAIGN_LEVELS,
   CEFR_LEVELS,
   CEFR_ORDER,
-  CEFR_TOLERANCE,
   LEVEL_SEED_STEP,
   LEVELS_PER_CEFR,
   LETTER_WEIGHTS,
@@ -13,7 +12,6 @@ import {
   MIN_LONG_WORDS,
   MIN_VOWELS,
   MIN_WORDS,
-  NEUTRAL_CEFR_RANK,
   VOWELS,
   WHEEL_SIZE,
 } from '@/constants/game';
@@ -29,7 +27,6 @@ const VOWEL_SET: ReadonlySet<string> = new Set<string>(VOWELS);
 type Attempt = {
   letters: string[];
   wordSet: string[];
-  distance: number;
   acceptable: boolean;
 };
 
@@ -44,16 +41,21 @@ export function levelConfig(levelIndex: number): LevelConfig {
   };
 }
 
-export function meanCefrRank(
-  words: readonly string[],
-  cefrMap: Readonly<Record<string, CefrLevel>>,
-): number {
-  if (words.length === 0) return NEUTRAL_CEFR_RANK;
-  const total = words.reduce((sum, word) => {
-    const level = cefrLevel(cefrMap, word);
-    return sum + (level ? CEFR_ORDER[level] : NEUTRAL_CEFR_RANK);
-  }, 0);
-  return total / words.length;
+/**
+ * Words a level offers: every word the ring can spell that belongs to the
+ * level's own difficulty tier and fits the length band. A level therefore
+ * asks for words of a particular kind of difficulty, and the ring's letters
+ * are chosen to make that set land in the target size.
+ */
+export function levelWords(
+  dict: DictionaryData,
+  letters: readonly string[],
+  band: WordBand,
+  targetCefr: CefrLevel,
+): string[] {
+  return wordsFormable(dict.words, letters, band.min).filter(
+    (word) => word.length <= band.max && cefrLevel(dict.cefr, word) === targetCefr,
+  );
 }
 
 export function isAcceptable(
@@ -65,7 +67,7 @@ export function isAcceptable(
   if (wordSet.length < MIN_WORDS || wordSet.length > MAX_WORDS) return false;
   const longWords = wordSet.filter((word) => word.length >= band.max - 1).length;
   if (longWords < MIN_LONG_WORDS) return false;
-  return Math.abs(meanCefrRank(wordSet, cefrMap) - CEFR_ORDER[targetCefr]) <= CEFR_TOLERANCE;
+  return wordSet.every((word) => cefrLevel(cefrMap, word) === targetCefr);
 }
 
 export function generateLevel(
@@ -80,12 +82,7 @@ export function generateLevel(
   for (let attempt = 1; attempt <= MAX_REROLLS; attempt++) {
     const candidate = evaluateAttempt(seed, band, targetCefr, dict, attempt);
     if (candidate.acceptable) return toLevel(candidate, band, targetCefr);
-    if (
-      candidate.distance < best.distance ||
-      (candidate.distance === best.distance && candidate.wordSet.length > best.wordSet.length)
-    ) {
-      best = candidate;
-    }
+    if (candidate.wordSet.length > best.wordSet.length) best = candidate;
   }
   return toLevel(best, band, targetCefr);
 }
@@ -100,14 +97,10 @@ function evaluateAttempt(
   const rand = mulberry32(seed + attempt);
   const rarity = (CEFR_ORDER[targetCefr] - 1) / (CEFR_LEVELS.length - 1);
   const letters = ensureVowels(pickLetters(rand, rarity));
-  const wordSet = wordsFormable(dict.words, letters, band.min).filter(
-    (word) => word.length <= band.max,
-  );
-  const distance = Math.abs(meanCefrRank(wordSet, dict.cefr) - CEFR_ORDER[targetCefr]);
+  const wordSet = levelWords(dict, letters, band, targetCefr);
   return {
     letters,
     wordSet,
-    distance,
     acceptable: isAcceptable(wordSet, band, targetCefr, dict.cefr),
   };
 }

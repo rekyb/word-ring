@@ -1,11 +1,11 @@
 # Core Logic — Technical Requirements & Implementation Plan (Issue #2)
 
-**Status:** DRAFT for final review — nothing implemented yet.
+**Status:** IMPLEMENTED on `feat/core-logic` — see §8 for what changed during implementation.
 
 **Goal:** Ship the pure, unit-tested game logic for Word Ring: a bundled
-dictionary (SCOWL validity + Oxford CEFR tags), a deterministic seeded level
-generator with CEFR-based difficulty, and scoring, all in `src/lib/` with no
-React, state, or I/O.
+dictionary (SCOWL-derived, with our own difficulty tiers), a deterministic
+seeded level generator with tier-based difficulty, and scoring, all in
+`src/lib/` with no React, state, or I/O.
 
 **Spec:** `gdd/gameplay.md`, `gdd/levels.md` (the PRD). This document is the TRD
 that fills in the detail the GDD leaves open, and it is what implementation
@@ -24,17 +24,17 @@ unit-testable with small fixtures.
 | File | Responsibility |
 |---|---|
 | `src/lib/prng.ts` | Seeded deterministic PRNG (letter selection) |
-| `src/lib/dictionary.ts` | Word lookup, formable-words, and CEFR tag lookup |
-| `src/lib/level-generator.ts` | Seed + band + target CEFR → `Level`, with difficulty ramp |
+| `src/lib/dictionary.ts` | Word lookup, formable-words, and difficulty-tier lookup |
+| `src/lib/level-generator.ts` | Seed + band + target tier → `Level`, with difficulty ramp |
 | `src/lib/scoring.ts` | Length-based points + star thresholds |
 | `src/types/game.ts` | `CefrLevel`, `WordBand`, `Level`, `LevelConfig`, `DictionaryData` |
-| `src/constants/game.ts` | Wheel size, star thresholds, score table, letter weights, CEFR config, validation ranges |
-| `src/lib/data/words.ts` | Bundled SCOWL validity list (sorted, ~40k) — generated |
-| `src/lib/data/cefr.ts` | Bundled Oxford CEFR map (word → level, ~5k) — generated |
+| `src/constants/game.ts` | Wheel size, star thresholds, score table, letter weights, tier config, validation ranges |
+| `src/lib/data/words.ts` | Bundled word list (sorted, 79k) + parallel tier string — generated |
+| `scripts/generate-dictionary.mjs` | Regenerates `words.ts` from a pinned ESDB commit |
 
 `prng` → `level-generator` → `dictionary`; `scoring` is standalone. The
 generator receives `DictionaryData` as an argument; only the top-level caller
-(a later game screen) wires in the bundled `words.ts` + `cefr.ts`.
+(a later game screen) wires in the bundled `words.ts`.
 
 ---
 
@@ -58,7 +58,7 @@ export interface LevelConfig { seed: number; band: WordBand; targetCefr: CefrLev
 
 export interface DictionaryData {
   words: readonly string[];                 // sorted, lowercase (SCOWL)
-  cefr: Readonly<Record<string, CefrLevel>>; // Oxford overlay (subset)
+  cefr: Readonly<Record<string, CefrLevel>>; // difficulty tier per word
 }
 ```
 
@@ -85,7 +85,7 @@ export function cefrLevel(
   cefrMap: Readonly<Record<string, CefrLevel>>,
   word: string,
 ): CefrLevel | undefined
-// Oxford CEFR tag, or undefined for untagged (neutral) words
+// the word's difficulty tier, or undefined if the word is untagged
 ```
 
 ```ts
@@ -107,11 +107,21 @@ export function generateLevel(
 export function levelConfig(levelIndex: number): LevelConfig
 // pure mapping from 1-based level number to { seed, band, targetCefr }
 
-export function meanCefrRank(
-  words: readonly string[],
+export function levelWords(
+  dict: DictionaryData,
+  letters: readonly string[],
+  band: WordBand,
+  targetCefr: CefrLevel,
+): string[]
+// every word the ring can spell, within the band, at exactly the target tier
+
+export function isAcceptable(
+  wordSet: readonly string[],
+  band: WordBand,
+  targetCefr: CefrLevel,
   cefrMap: Readonly<Record<string, CefrLevel>>,
-): number
-// mean CEFR rank (A1=1..C1=5); untagged words count as NEUTRAL_CEFR_RANK
+): boolean
+// size, length mix, and tier purity of a candidate word set
 ```
 
 ---
@@ -140,16 +150,16 @@ export const LETTER_WEIGHTS: Readonly<Record<string, number>> = {
 // CEFR difficulty model
 export const CEFR_ORDER: Readonly<Record<CefrLevel, number>> =
   { A1: 1, A2: 2, B1: 3, B2: 4, C1: 5 };
-export const NEUTRAL_CEFR_RANK = 3;   // untagged words score as B1 (mid)
-export const CEFR_TOLERANCE = 0.75;   // accepted distance from target rank
-export const LEVELS_PER_CEFR = 10;    // 5 bands * 10 = 50 levels
+export const CEFR_LEVELS: readonly CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1'];
+export const LEVELS_PER_CEFR = 10;    // 5 tiers * 10 = 50 levels
 export const CAMPAIGN_LEVELS = 50;    // A1..C1, fixed campaign
+export const LEVEL_SEED_STEP = 2654435761;
 
-// Word-length band per CEFR tier (short common words early, long advanced late)
+// Word-length band per tier (short common words early, long advanced late)
 export const MIN_BY_CEFR: Readonly<Record<CefrLevel, number>> =
-  { A1: 3, A2: 3, B1: 4, B2: 4, C1: 5 };
+  { A1: 3, A2: 3, B1: 3, B2: 4, C1: 4 };
 export const MAX_BY_CEFR: Readonly<Record<CefrLevel, number>> =
-  { A1: 5, A2: 6, B1: 7, B2: 8, C1: 8 };
+  { A1: 3, A2: 4, B1: 5, B2: 6, C1: 7 };
 
 // Level validation (re-roll if out of range)
 export const MIN_WORDS = 20;
@@ -165,21 +175,31 @@ export const MAX_REROLLS = 20;
 ### 4.1 Dictionary format — sorted array + binary search
 
 **SCOWL list**: a sorted lowercase `string[]`, binary search for `hasWord`, one
-linear pass for `wordsFormable`. 40k words × ~6 chars per generation is well
+linear pass for `wordsFormable`. 79k words x ~6 chars per generation is well
 under 50ms; no trie build cost. A trie is a later optimization only if
 profiling demands it.
 
-### 4.2 Dictionary data — SCOWL validity + Oxford CEFR overlay
+### 4.2 Dictionary data — SCOWL only, with our own tiers
 
-Two bundled, generated files:
+One bundled, generated file: `src/lib/data/words.ts`. It holds the sorted word
+list (79,128 words, lowercase, 3-8 letters, proper nouns excluded) plus a
+parallel string of one difficulty tier per word.
 
-- `src/lib/data/words.ts` — SCOWL-derived common words (~40k), lowercase,
-  sorted, proper nouns excluded. Answer key validity.
-- `src/lib/data/cefr.ts` — the Oxford 3000/5000 subset (~5k words), mapping
-  `word -> CefrLevel`. Difficulty signal.
+**Source:** the English Speller Database (ESDB, formerly SCOWLv2) at pinned
+commit `7f2f40`, fetched by `scripts/generate-dictionary.mjs` and checksummed.
+ESDB is MIT-like licensed, so the list can be bundled and redistributed.
 
-Words in `words.ts` but not in `cefr.ts` are valid but **untagged** and count as
-neutral difficulty (see 4.6). `dictionary.ts` hides both formats.
+**Our tiers:** ESDB's own frequency "size" field (35 = smallest and most
+common, 80 = valid but unusual) is mapped to our five tiers. This is our own
+spec, benchmarked against the CEFR scale but not derived from Oxford's data:
+
+| Tier | ESDB size | Words | CEFR analogue |
+|---|---|---|---|
+| A1 | <= 35 | 24,454 | A1 |
+| A2 | 36-50 | 10,236 | A2 |
+| B1 | 51-60 | 7,182 | B1 |
+| B2 | 61-70 | 18,443 | B2 |
+| C1 | 71-80 | 18,813 | C1 |
 
 ### 4.3 Seeded PRNG — mulberry32
 
@@ -194,41 +214,45 @@ weighted letter selection. `Math.random()` is never used in `lib/`.
 3. Ensure at least `MIN_VOWELS` vowels; if short, deterministically swap the
    lowest-weight selected consonant(s) for vowels.
 
-### 4.5 Word-set computation — filter, then band
+### 4.5 Word-set computation — tier-exact, then band
 
 `wordsFormable` returns every 3+ letter word whose characters are all in the
-ring. The generator keeps only words within `[band.min, band.max]`. "Trim
-ultra-rare words" happens at build time (SCOWL is already common words).
+ring. The generator then keeps only words that are **at exactly the target
+tier** and within `[band.min, band.max]`.
 
-### 4.6 CEFR difficulty model (replaces the old letter-rarity-only ramp)
+Measured against the real 79k dictionary, a ring of 9 letters spells 95-500
+words, so keeping *all* words at or below the tier cannot land in a playable
+20-80 word range. Selecting the target tier exactly is what makes the level
+size controllable, and it is also what makes the tier meaningful: an A1 level
+asks for easy words, a C1 level asks for hard ones.
 
-Difficulty is defined by the answer key's CEFR distribution, not by a visible
-tier. `levelConfig(levelIndex)` derives the tier and band:
+### 4.6 Difficulty model
 
-- **targetCefr** = the band for `ceil(levelIndex / LEVELS_PER_CEFR)`, i.e.
-  levels 1–10 = A1, 11–20 = A2, 21–30 = B1, 31–40 = B2, 41–50 = C1.
+`levelConfig(levelIndex)` derives the tier and band:
+
+- **targetCefr** = the tier for `ceil(levelIndex / LEVELS_PER_CEFR)`, i.e.
+  levels 1-10 = A1, 11-20 = A2, 21-30 = B1, 31-40 = B2, 41-50 = C1.
 - **band** = `{ min: MIN_BY_CEFR[targetCefr], max: MAX_BY_CEFR[targetCefr] }`.
-- **seed** = `levelIndex * LARGE_PRIME` (stable per level; re-roll advances it).
+  The bands are narrow early and widen later, because a 9-letter ring spells
+  far more short words than long ones.
+- **seed** = `levelIndex * LEVEL_SEED_STEP` (stable per level; re-roll advances it).
 - **letter rarity** = smooth blend `t = clamp(levelIndex / CAMPAIGN_LEVELS, 0, 1)`
   flattening `LETTER_WEIGHTS` toward uniform, so letters get rarer across and
   within tiers.
 
-The generator accepts a level when `|meanCefrRank(wordSet) - CEFR_ORDER[targetCefr]|`
-is within `CEFR_TOLERANCE`, alongside the count and length checks. `meanCefrRank`
-is a pure, directly-tested helper.
-
-The player never sees the CEFR tier; it is internal. It shows up only as
+The player never sees the tier; it is internal. It shows up only as
 "words get harder".
 
 ### 4.7 Validation and re-roll
 
-After computing the band-filtered word set:
+After computing the tier-exact, band-filtered word set:
 
-1. Accept if word count is in `[MIN_WORDS, MAX_WORDS]`, at least `MIN_LONG_WORDS`
-   words of length `>= band.max - 1`, and the CEFR mean is within tolerance.
+1. Accept if the word count is in `[MIN_WORDS, MAX_WORDS]`, at least
+   `MIN_LONG_WORDS` words are of length `>= band.max - 1`, and every word is
+   at the target tier.
 2. Otherwise advance the seed (`seed + 1`) and regenerate, up to `MAX_REROLLS`.
-3. If still invalid, return the best attempt seen (closest CEFR mean, then
-   highest word count) — still deterministic, never fails.
+3. If still invalid, return the best attempt seen (most words) — still
+   deterministic, never fails.
 
 ### 4.8 Scoring
 
@@ -264,10 +288,13 @@ Each task is independently testable and commits on its own. Tests are colocated
 - Create `src/lib/level-generator.ts` + `level-generator.test.ts` (fixture `DictionaryData` injected).
 - Tests: determinism (same inputs → same level); 9 distinct letters; >= 3 vowels; every word set entry is a real word within band; word count within range; `meanCefrRank` math; `levelConfig` returns the expected `{ seed, band, targetCefr }` per level index.
 
-### Task 6: Bundled data (SCOWL validity + Oxford CEFR map)
-- Create `scripts/generate-dictionary.mjs` + generated `src/lib/data/words.ts` and `src/lib/data/cefr.ts`.
-- Script sources SCOWL (~40k common, proper nouns excluded) and the Oxford 3000/5000 CEFR tags, then emits both modules.
-- Test: smoke assertions that `words.ts` is sorted with no duplicates and `cefr.ts` keys are a subset of `words.ts`.
+### Task 6: Bundled data (SCOWL-derived words + our tiers)
+- Create `scripts/generate-dictionary.mjs` + generated `src/lib/data/words.ts`.
+- Script fetches a pinned ESDB commit (checksum verified), parses it, drops
+  proper nouns/abbreviations/multi-word entries, assigns our tier per word from
+  the ESDB size band, and emits the sorted list plus the parallel tier string.
+- Test: smoke assertions that the list is sorted, has no duplicates, holds only
+  lowercase alphabetic words, and covers every tier.
 
 ---
 
@@ -279,15 +306,42 @@ Each task is independently testable and commits on its own. Tests are colocated
 | 2 | Letters with repeated chars in the wheel | Must be 9 *distinct* letters, never duplicated | Task 5 |
 | 3 | `foundCount` 0 with `totalCount` 0 | `starsFor` returns 0, no divide-by-zero | Task 3 |
 | 4 | Level index 0, negative, or > CAMPAIGN_LEVELS | `levelConfig` clamps to a valid tier/band | Task 5 |
-| 5 | Word set with no target-CEFR words | Re-rolls, then returns best attempt rather than failing | Task 5 |
+| 5 | A ring that spells too few or too many words | Re-rolls, then returns best attempt rather than failing | Task 5 |
 | 6 | Dictionary entry with uppercase/whitespace | Normalized (lowercased) before lookup | Task 4 |
 
 ---
 
 ## 7. Decisions confirmed with the user
 
-1. **Dictionary source**: SCOWL validity list + Oxford 3000/5000 CEFR overlay
-   (option b) — no runtime external dependency; both lists bundled and generated.
-2. **Difficulty span**: A1–C1 (C2 dropped). 5 CEFR tiers.
-3. **Campaign**: fixed, 50 levels (10 per CEFR tier); CEFR tier hidden from the player.
+1. **Dictionary source**: SCOWL (ESDB) only — no runtime external dependency;
+   the list is bundled and generated from a pinned commit.
+2. **Difficulty tiers**: our own 5-tier spec derived from ESDB frequency bands,
+   benchmarked against the CEFR scale (A1-C1, C2 dropped).
+3. **Campaign**: fixed, 50 levels (10 per tier); the tier is hidden from the player.
 4. **Scoring table**: proposed values above accepted as a starting point.
+
+---
+
+## 8. What changed during implementation
+
+1. **Oxford overlay dropped.** The Oxford 3000/5000 CEFR list is copyrighted by
+   OUP and its terms forbid redistributing content, which a bundled list and a
+   public repo would both do. Since the app never shows the tier name to
+   players, we derive our own tiers from ESDB's frequency sizes instead
+   (4.2). No Oxford data ships.
+2. **Level word set is tier-exact, not tier-cumulative.** Keeping every word at
+   or below the tier produced 95-500 words per level against the real
+   dictionary, so no level could satisfy the 20-80 target. Selecting the
+   target tier exactly gives 100% acceptance with counts of 23-80 (4.5).
+3. **Word-length bands retuned from measurement.** The original 3-5 / 4-8 bands
+   were too wide for a 9-letter ring; the shipped bands are 3-3, 3-4, 3-5, 4-6
+   and 4-7 for A1 through C1 (3).
+4. **Letter rarity driven by tier, not level index.** `generateLevel` does not
+   receive the level index, so rarity is derived from the target tier. The
+   effect is the same (rarer letters at higher tiers) and the signature stays
+   as approved.
+5. **Dictionary grew to 79k words** (ESDB sizes up to 80) so the upper tiers
+   have enough words to build puzzles from.
+6. **Tests added against the real bundled dictionary**
+   (`dictionary-data.test.ts`, `level-generator-data.test.ts`), since fixture-only
+   tests could not have caught issues 2-3.

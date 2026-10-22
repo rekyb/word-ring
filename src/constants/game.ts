@@ -52,8 +52,6 @@ export const CEFR_ORDER: Readonly<Record<CefrLevel, number>> = {
   B2: 4,
   C1: 5,
 };
-export const NEUTRAL_CEFR_RANK = 3;
-export const CEFR_TOLERANCE = 0.75;
 export const CEFR_LEVELS: readonly CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1'];
 export const LEVELS_PER_CEFR = 10;
 export const CAMPAIGN_LEVELS = 50;
@@ -62,18 +60,20 @@ export const LEVEL_SEED_STEP = 2654435761;
 export const MIN_BY_CEFR: Readonly<Record<CefrLevel, number>> = {
   A1: 3,
   A2: 3,
-  B1: 4,
+  B1: 3,
   B2: 4,
-  C1: 5,
+  C1: 4,
 };
 export const MAX_BY_CEFR: Readonly<Record<CefrLevel, number>> = {
-  A1: 5,
-  A2: 6,
-  B1: 7,
-  B2: 8,
-  C1: 8,
+  A1: 3,
+  A2: 4,
+  B1: 5,
+  B2: 6,
+  C1: 7,
 };
 
+// A level must offer enough words to feel like a puzzle and include some long
+// ones, so the word set never degenerates into a wall of short words.
 export const MIN_WORDS = 20;
 export const MAX_WORDS = 80;
 export const MIN_LONG_WORDS = 2;

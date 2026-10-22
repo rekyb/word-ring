@@ -8,24 +8,28 @@ set on every device.
 
 ## Dictionary
 
-- Two bundled, read-only lists (no runtime dependency):
-  - **Validity** — SCOWL-derived common words (~40k); proper nouns excluded.
-  - **CEFR overlay** — the Oxford 3000/5000 subset (~5k words) tagged A1–C1, used
-    only for difficulty.
+- Bundled, read-only word list derived from the **English Speller Database**
+  (ESDB, formerly SCOWLv2), MIT-like licensed so it can be bundled freely.
+  ~79k common words, lowercase, 3-8 letters, **proper nouns excluded**.
+- **Difficulty tiers** come from ESDB's own frequency bands (35 = smallest and
+  most common, 80 = valid but unusual), mapped to five tiers: A1, A2, B1, B2, C1.
+  This is our own spec, benchmarked against the CEFR scale but not taken from
+  Oxford's data. The tier is never shown to the player.
 - Size-optimized for fast lookup at runtime.
-- Format: sorted lowercase list with binary-search lookup; the `dictionary` module
-  owns lookup and hides the format. Details in the implementation plan.
+- Format: sorted lowercase list with binary-search lookup; the `dictionary`
+  module owns lookup and hides the format. Details in the implementation plan.
 
 ## Word-length band
 
 Each level declares a `[minWordLength, maxWordLength]` band:
 
-- **Early levels:** 3–5 letters (lots of easy short words).
-- **Late levels:** 4–8 letters (drops trivial 3-letter words, demands longer finds).
+- **Early levels:** 3–3 letters (lots of easy short words).
+- **Late levels:** 4–7 letters (drops trivial 3-letter words, demands longer finds).
 
-The band maps to the CEFR tier (see Difficulty ramp). The generator computes *all*
-valid 3+ letter words from the 9 letters, then keeps only words within the band as
-the level's word set. Words outside the band simply don't count.
+The band maps to the difficulty tier (see Difficulty ramp). The generator computes
+*all* valid 3+ letter words from the 9 letters, then keeps only the words that are
+both within the band **and at the level's difficulty tier**. Words outside the
+band or tier simply don't count.
 
 ## Algorithm
 
@@ -36,24 +40,25 @@ For level index `N`:
    enough vowels.
 3. **Compute the word set** — every valid 3+ letter word from those letters
    (allowing reuse).
-4. **Apply the word-length band** and trim ultra-rare words.
+4. **Keep the words at the level's tier** and within the word-length band.
 5. **Validate the result**: word count within target range, a good mix of lengths
-   including a couple of long words, and the CEFR mix matching the level's tier.
+   including a couple of long words, and every word at the level's tier.
 6. If the result is out of range, **advance the seed and re-roll** — still
    deterministic.
 
 ## Difficulty ramp
 
-Difficulty is defined by the answer key's **CEFR level** (Oxford-tagged words).
-The player never sees the tier; it only shows up as words getting harder.
+Difficulty is defined by the answer key's **difficulty tier** (derived from word
+frequency). The player never sees the tier; it only shows up as words getting
+harder.
 
-1. **CEFR tier** (primary): levels progress A1 → A2 → B1 → B2 → C1.
+1. **Tier** (primary): levels progress A1 → A2 → B1 → B2 → C1.
 2. **Letter rarity** (mechanism): the generator samples rarer letters at higher
-   tiers to produce the target CEFR mix.
-3. **Word-length band** shifts up and widens (3–5 early, 5–8 late).
+   tiers to produce the target mix.
+3. **Word-length band** shifts up and widens (3-3 early, 4-7 late).
 4. **Total word count** increases.
 
-The campaign is a fixed **50 levels** (10 per CEFR tier). The generator can still
+The campaign is a fixed **50 levels** (10 per tier). The generator can still
 produce any level number if the campaign is extended later.
 
 ## Output

@@ -1,5 +1,5 @@
-import { NEUTRAL_CEFR_RANK, VOWELS, WHEEL_SIZE, MIN_VOWELS } from '@/constants/game';
-import { generateLevel, isAcceptable, levelConfig, meanCefrRank } from '@/lib/level-generator';
+import { MAX_WORDS, MIN_WORDS, MIN_VOWELS, VOWELS, WHEEL_SIZE } from '@/constants/game';
+import { generateLevel, isAcceptable, levelConfig, levelWords } from '@/lib/level-generator';
 import type { CefrLevel, DictionaryData, WordBand } from '@/types/game';
 
 const FIXTURE_WORDS = [
@@ -102,7 +102,7 @@ describe('levelConfig', () => {
   it('maps the first tier to A1 with its band', () => {
     expect(levelConfig(1)).toMatchObject({
       targetCefr: 'A1',
-      band: { min: 3, max: 5 },
+      band: { min: 3, max: 3 },
     });
   });
 
@@ -123,6 +123,21 @@ describe('levelConfig', () => {
     [999, 50],
   ])('clamps level %i into the campaign range', (requested, clamped) => {
     expect(levelConfig(requested)).toEqual(levelConfig(clamped));
+  });
+});
+
+describe('levelWords', () => {
+  it('keeps only words that the ring can spell within the band', () => {
+    const set = levelWords(DICT, ['c', 'a', 't', 'b', 'e', 'n'], BAND, 'A1');
+    expect(set).toContain('cat');
+    expect(set).toContain('eat');
+    expect(set).not.toContain('house');
+  });
+
+  it('excludes words outside the target tier', () => {
+    const letters = ['h', 'e', 'a', 'r', 't'];
+    expect(levelWords(DICT, letters, BAND, 'A1')).not.toContain('heart');
+    expect(levelWords(DICT, letters, BAND, 'B1')).toContain('heart');
   });
 });
 
@@ -165,37 +180,45 @@ describe('generateLevel', () => {
   });
 });
 
-describe('meanCefrRank', () => {
-  it('treats an empty word set as neutral', () => {
-    expect(meanCefrRank([], {})).toBe(NEUTRAL_CEFR_RANK);
-  });
-
-  it('averages tagged ranks', () => {
-    expect(meanCefrRank(['cat', 'tent'], { cat: 'A1', tent: 'C1' })).toBe(3);
-  });
-
-  it('counts untagged words as neutral', () => {
-    expect(meanCefrRank(['cat', 'zzz'], { cat: 'A1' })).toBe(2);
-  });
-});
-
 describe('isAcceptable', () => {
-  const cefr: Readonly<Record<string, CefrLevel>> = { cat: 'A1', tent: 'A1' };
-  const acceptableSet = [...Array<string>(18).fill('cat'), 'tent', 'tent'];
+  const cefr: Readonly<Record<string, CefrLevel>> = {
+    cat: 'A1',
+    tent: 'A1',
+    cake: 'A1',
+    bake: 'A1',
+    lake: 'A1',
+    make: 'A1',
+    mate: 'A1',
+    note: 'A1',
+    rate: 'A1',
+    tape: 'A1',
+  };
+  const longEnough = ['tent', 'cake', 'bake', 'lake', 'make'];
 
-  it('accepts a set with enough words, long words, and a matching CEFR mean', () => {
-    expect(isAcceptable(acceptableSet, BAND, 'A1', cefr)).toBe(true);
+  it('accepts a set with enough words, long words, all at the target tier', () => {
+    const set = [...longEnough, ...Array<string>(MIN_WORDS).fill('cat')];
+    expect(isAcceptable(set, BAND, 'A1', cefr)).toBe(true);
   });
 
   it('rejects a set below the minimum word count', () => {
-    expect(isAcceptable(acceptableSet.slice(0, 19), BAND, 'A1', cefr)).toBe(false);
+    const set = [...longEnough, ...Array<string>(MIN_WORDS - longEnough.length - 1).fill('cat')];
+    expect(set.length).toBeLessThan(MIN_WORDS);
+    expect(isAcceptable(set, BAND, 'A1', cefr)).toBe(false);
+  });
+
+  it('rejects a set above the maximum word count', () => {
+    const set = [...longEnough, ...Array<string>(MAX_WORDS).fill('cat')];
+    expect(isAcceptable(set, BAND, 'A1', cefr)).toBe(false);
   });
 
   it('rejects a set without enough long words', () => {
-    expect(isAcceptable(Array<string>(20).fill('cat'), BAND, 'A1', cefr)).toBe(false);
+    const set = Array<string>(MIN_WORDS).fill('cat');
+    expect(isAcceptable(set, BAND, 'A1', cefr)).toBe(false);
   });
 
-  it('rejects a set whose CEFR mean is off target', () => {
-    expect(isAcceptable(acceptableSet, BAND, 'C1', cefr)).toBe(false);
+  it('rejects a set containing words outside the target tier', () => {
+    const set = [...longEnough, ...Array<string>(MIN_WORDS).fill('dog')];
+    const mixed: Readonly<Record<string, CefrLevel>> = { dog: 'A2', ...cefr };
+    expect(isAcceptable(set, BAND, 'A1', mixed)).toBe(false);
   });
 });
