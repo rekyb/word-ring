@@ -23,13 +23,18 @@ open level → spell words from a letter ring → fill progress → earn 1–3 s
 1. **Chill first.** No fail state, no timer, no lives. Wrong guesses cost nothing.
 2. **One-tap, one-word.** The core action is tapping letters; anything else is a light touch.
 3. **Short sessions.** A level takes 1–3 minutes; ideal for commutes and breaks.
-4. **Endless, free content.** Levels are generated deterministically on-device, so
-   hundreds of levels cost nothing to produce.
+4. **Free, generated content.** Levels are generated deterministically on-device, so a
+   50-level campaign costs nothing to produce — and extends freely.
 
 ## Success criteria
 
 - Ship a polished MVP to the Google Play Store.
-- Reach ~100 playable levels at launch (effectively free to scale via generation).
+- Reach ~50 playable levels at launch (effectively free to scale via generation).
 - Retain via the 1–3 star loop; monetize via rewarded ads, interstitial ads, and a
   one-time "remove ads" purchase.
 - Serve as a portfolio piece demonstrating a full RN + Expo game from design to release.
+
+## Planning
+
+Design decisions map to implementation plans (TRDs) under `plans/`. The core-logic
+plan is `plans/2026-10-22-core-logic.md`.
