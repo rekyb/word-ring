@@ -17,8 +17,8 @@ Each module has a single responsibility:
 
 | Module | Job |
 |---|---|
-| `dictionary` | Load the bundled word list; fast "is this a word?" lookup |
-| `levelGenerator` | Pure, seeded: letters → word set → band filter → level spec |
+| `dictionary` | Load the bundled word list (SCOWL validity + Oxford CEFR tags); fast lookup |
+| `levelGenerator` | Pure, seeded: letters → word set → band + CEFR filter → level spec |
 | `scoring` | Points from word length; star rating from % found |
 | `progress` | Persist/load stars and completed levels via AsyncStorage |
 | `ads` | Wrapper for rewarded + interstitial; graceful offline/failure |
