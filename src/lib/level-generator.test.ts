@@ -102,7 +102,7 @@ describe('levelConfig', () => {
   it('maps the first tier to A1 with its band', () => {
     expect(levelConfig(1)).toMatchObject({
       targetCefr: 'A1',
-      band: { min: 3, max: 3 },
+      band: { min: 3, max: 4 },
     });
   });
 

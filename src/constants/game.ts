@@ -61,15 +61,15 @@ export const MIN_BY_CEFR: Readonly<Record<CefrLevel, number>> = {
   A1: 3,
   A2: 3,
   B1: 3,
-  B2: 4,
-  C1: 4,
+  B2: 3,
+  C1: 3,
 };
 export const MAX_BY_CEFR: Readonly<Record<CefrLevel, number>> = {
-  A1: 3,
+  A1: 4,
   A2: 4,
-  B1: 5,
-  B2: 6,
-  C1: 7,
+  B1: 4,
+  B2: 4,
+  C1: 4,
 };
 
 // A level must offer enough words to feel like a puzzle and include some long

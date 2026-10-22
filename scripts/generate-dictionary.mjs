@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BLOCKED_WORD_SET } from './blocked-words.mjs';
 
 const SOURCE_COMMIT = '7f2f4078354752045ee16a041605686561122185';
 const SOURCE_URL = `https://raw.githubusercontent.com/en-wl/wordlist-diff/${SOURCE_COMMIT}/scowl.txt`;
@@ -31,13 +32,18 @@ const MAX_LENGTH = 8;
 // Difficulty tiers. Our own spec, benchmarked against the CEFR scale
 // (A1 easiest -> C1 hardest) but derived from ESDB's own frequency "size"
 // bands. See plans/2026-10-22-core-logic.md.
-const TIER_SIZE_BANDS = [
-  { tier: 'A1', maxSize: 35 },
-  { tier: 'A2', maxSize: 50 },
-  { tier: 'B1', maxSize: 60 },
-  { tier: 'B2', maxSize: 70 },
-  { tier: 'C1', maxSize: 80 },
-];
+//
+// Tiers are equal-sized quantiles of the frequency-sorted list rather than raw
+// size bands, because ESDB's sizes are unevenly populated (size 35 holds 24k
+// words, size 40 only 2k). Quantiles give every tier a comparable number of
+// words, so every tier can build a playable level.
+//
+// Words above MAX_SIZE are dropped entirely: size 80 is the "strange and unusual
+// words people like to use in word games such as Scrabble" band (aggadah,
+// chometz, tyiyns), which no casual player would ever find, so including it
+// makes late levels unplayable rather than hard.
+const TIER_NAMES = ['A1', 'A2', 'B1', 'B2', 'C1'];
+const MAX_SIZE = 70;
 
 const PROPER_NOUN_CLASSES = new Set([
   'person',
@@ -53,6 +59,10 @@ const PROPER_NOUN_CLASSES = new Set([
 const EXCLUDED_POS = new Set(['abbr', 'x', 'wp', 'we', 'pre', 'suf']);
 const EXCLUDED_CATEGORIES = new Set(['hacker', 'roman-numerals']);
 const PROPER_NOUN_TAGS = new Set(['name', 'town']);
+// Usage notes marking words as offensive, vulgar, or non-standard. A chill,
+// family-friendly game must not offer these. The note sits after the
+// part-of-speech block, so it is matched anywhere in the line.
+const EXCLUDED_USAGE_NOTES = /\((offensive-\d|vulgar-\d|nonstandard)\)/;
 const REGIONS = new Set(['US', 'GB', 'CA', 'AU']);
 const ANNOTATIONS = '-*@~!†';
 const WORD_PATTERN = /^[a-z]+$/;
@@ -130,19 +140,16 @@ function parseDerivedForms(text) {
     .map(stripAnnotations);
 }
 
-function tierForSize(size) {
-  for (const band of TIER_SIZE_BANDS) {
-    if (size <= band.maxSize) return band.tier;
-  }
-  return null;
-}
-
 function parseDictionary(source) {
   const sizes = new Map();
+  // Map each lemma to the smallest size it appears under, and whether
+  // that smallest size is marked as a proper noun.
+  const minSizeInfo = new Map();
 
   for (const rawLine of source.split('\n')) {
     const line = rawLine.trim();
-    if (line === '' || line.startsWith('#')) continue;
+    if (line === '') continue;
+    if (line.startsWith('#') && !line.startsWith('#:')) continue;
 
     const separator = line.indexOf(': ');
     if (separator === -1) continue;
@@ -156,32 +163,72 @@ function parseDictionary(source) {
     if (posStart === -1 || posEnd === -1) continue;
 
     const posBlock = body.slice(posStart + 1, posEnd);
-    const posMatch = /^([a-zA-Z_]+)(?:\/([a-zA-Z?]+))?/.exec(posBlock);
+    const posMatch = /^([a-zA-Z_]+)(?:\/([a-zA-Z?]+))?/.exec(posMatchSafe(posBlock));
     if (!posMatch) continue;
     if (EXCLUDED_POS.has(posMatch[1])) continue;
-    if (posMatch[2] && PROPER_NOUN_CLASSES.has(posMatch[2])) continue;
-    if (head.isProperNoun) continue;
 
-    const candidates = [cleanLemma(body.slice(0, posStart)), ...parseDerivedForms(body.slice(posEnd + 1))];
+    const isProperNoun =
+      (posMatch[2] && PROPER_NOUN_CLASSES.has(posMatch[2])) || head.isProperNoun;
+
+    const lemma = cleanLemma(body.slice(0, posStart));
+    if (!lemma) continue;
+
+    const lower = lemma.toLowerCase();
+    const current = minSizeInfo.get(lower);
+    if (current === undefined || head.size < current.size) {
+      minSizeInfo.set(lower, { size: head.size, isProperNoun });
+    }
+
+    if (isProperNoun) continue;
+    if (EXCLUDED_USAGE_NOTES.test(body)) continue;
+
+    const candidates = [lemma, ...parseDerivedForms(body.slice(posEnd + 1))];
 
     for (const candidate of candidates) {
       if (candidate.length < MIN_LENGTH || candidate.length > MAX_LENGTH) continue;
       if (!WORD_PATTERN.test(candidate)) continue;
-      const previous = sizes.get(candidate);
-      if (previous === undefined || head.size < previous) sizes.set(candidate, head.size);
+      const lower = candidate.toLowerCase();
+      const previous = sizes.get(lower);
+      if (previous === undefined || head.size < previous) sizes.set(lower, head.size);
     }
+  }
+
+  for (const [word, info] of minSizeInfo) {
+    if (info.isProperNoun && !sizes.has(word)) {
+      // Only a proper-noun entry exists -> drop it.
+      sizes.delete(word);
+    }
+  }
+  for (const blocked of BLOCKED_WORD_SET) {
+    sizes.delete(blocked);
   }
 
   return sizes;
 }
 
+// The part-of-speech block may carry a definition or usage note after it.
+function posMatchSafe(posBlock) {
+  return posBlock.split(/\s+/)[0];
+}
+
 function buildRecords(sizes) {
+  // Frequency order: commonest first. ESDB's size is the frequency measure,
+  // and a word's own size is the smallest one it appears under.
+  const byFrequency = [...sizes.entries()].filter(([, size]) => size <= MAX_SIZE);
+  byFrequency.sort((a, b) => (a[1] - b[1] || (a[0] < b[0] ? -1 : 1)));
+
+  // Split into equal-sized quantiles so every tier holds a comparable number
+  // of words and can therefore build a level of a similar size.
   const records = [];
-  for (const [word, size] of sizes) {
-    const tier = tierForSize(size);
-    if (tier === null) continue;
-    records.push({ word, tier });
-  }
+  const total = byFrequency.length;
+  byFrequency.forEach(([word], index) => {
+    const tierIndex = Math.min(
+      TIER_NAMES.length - 1,
+      Math.floor((index * TIER_NAMES.length) / total),
+    );
+    records.push({ word, tier: TIER_NAMES[tierIndex] });
+  });
+
   records.sort((a, b) => (a.word < b.word ? -1 : a.word > b.word ? 1 : 0));
   return records;
 }
@@ -189,7 +236,7 @@ function buildRecords(sizes) {
 function buildModule(records) {
   const blob = records.map(({ word }) => word.padEnd(RECORD_WIDTH, ' ')).join('');
   // One character per word, so the tier string stays parallel to the word blob.
-  const tierCodes = new Map(TIER_SIZE_BANDS.map((band, index) => [band.tier, String(index + 1)]));
+  const tierCodes = new Map(TIER_NAMES.map((tier, index) => [tier, String(index + 1)]));
   const tiers = records.map(({ tier }) => tierCodes.get(tier)).join('');
   return `// AUTO-GENERATED by scripts/generate-dictionary.mjs. Do not edit by hand.
 //
@@ -222,8 +269,8 @@ const counts = new Map();
 for (const { tier } of records) counts.set(tier, (counts.get(tier) ?? 0) + 1);
 
 console.log(`Parsed ${records.length} words from ESDB ${SOURCE_COMMIT}`);
-for (const band of TIER_SIZE_BANDS) {
-  console.log(`  ${band.tier} (size <= ${band.maxSize}): ${counts.get(band.tier) ?? 0}`);
+for (const tier of TIER_NAMES) {
+  console.log(`  ${tier}: ${counts.get(tier) ?? 0} words`);
 }
 
 if (process.argv.includes('--stats')) {
