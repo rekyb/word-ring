@@ -8,7 +8,8 @@ import { resolve } from 'node:path';
 const commitMsg = resolve('.git/COMMIT_EDITMSG');
 if (!process.argv[2] || resolve(process.argv[2]) !== commitMsg) process.exit(0);
 
-const attribution = /^(co-authored-by|generated (with|by)|created (with|by)|assisted (with|by)):?\s*.*$/gim;
+const attribution =
+  /^(co-authored-by|generated (?:with|by)|created (?:with|by)|assisted (?:with|by)):?\s*[^\n]*/gim;
 
 let message = readFileSync(commitMsg, 'utf8');
 message = message.replace(attribution, '');

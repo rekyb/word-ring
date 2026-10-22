@@ -108,7 +108,10 @@ function parseHead(head) {
     if (EXCLUDED_CATEGORIES.has(token)) return null;
   }
   if (specs.length === 0) return null;
-  const smallest = specs.reduce((a, b) => (a.size <= b.size ? a : b));
+  const smallest = specs.reduce(
+    (a, b) => (a.size <= b.size ? a : b),
+    specs[0],
+  );
   const isProperNoun = [...smallest.tags].some(tag => PROPER_NOUN_TAGS.has(tag));
   return { size: smallest.size, isProperNoun };
 }
